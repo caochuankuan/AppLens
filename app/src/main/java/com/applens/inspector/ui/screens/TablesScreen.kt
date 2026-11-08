@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -78,18 +79,29 @@ fun TablesScreen(
     onOpenTable: (TableInfo) -> Unit,
 ) {
     val context = LocalContext.current
-    var tables by remember(db.absolutePath) { mutableStateOf<List<TableInfo>?>(null) }
-    var loading by remember(db.absolutePath) { mutableStateOf(true) }
+    val cachedTables = remember(db.absolutePath) { DbRepository.cachedTables(db) }
+    var tables by remember(db.absolutePath) { mutableStateOf(cachedTables) }
+    var loading by remember(db.absolutePath) { mutableStateOf(cachedTables == null) }
     var error by remember(db.absolutePath) { mutableStateOf<String?>(null) }
     var reloadToken by remember(db.absolutePath) { mutableIntStateOf(0) }
     var mode by remember(db.absolutePath) { mutableStateOf<DbAccessMode?>(null) }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(reloadToken, db.absolutePath) {
+        val access = Shell.accessMode(app.packageName, app.isDebuggable)
+        mode = access
+
+        // Returning from the data page must reuse the cached table list. If the
+        // LazyColumn is composed with only the short loading item, its saved
+        // scroll index is clamped to that item and the user lands back at top.
+        if (reloadToken == 0 && tables != null) {
+            loading = false
+            return@LaunchedEffect
+        }
+
         loading = true
         error = null
         runCatching {
-            val access = Shell.accessMode(app.packageName, app.isDebuggable)
-            mode = access
             if (access == DbAccessMode.DENIED) {
                 throw DbException("Shizuku 权限已失效，或当前为 Shell 模式且该应用不可 run-as。")
             }
@@ -134,6 +146,7 @@ fun TablesScreen(
         )
 
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .navigationBarsPadding(),

@@ -172,7 +172,9 @@ object DbRepository {
         target
     }
 
-    private val tableCache = mutableMapOf<String, List<TableInfo>>()
+    private val tableCache = java.util.concurrent.ConcurrentHashMap<String, List<TableInfo>>()
+
+    fun cachedTables(db: DbFile): List<TableInfo>? = tableCache[db.absolutePath]
 
     suspend fun readTables(
         context: Context,
